@@ -89,7 +89,7 @@
 
         main { margin-left: 80px; flex: 1; padding: 40px; }
 
-        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; flex-wrap: wrap; gap: 15px; }
 
         .user-status { display: flex; align-items: center; gap: 15px; }
         .badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
@@ -210,6 +210,18 @@
         <main>
             <header>
                 <h1>Luca's 專屬影音與教育平台</h1>
+                <!-- 🔍 搜尋框與分類選單 -->
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="text" id="searchInput" placeholder="搜尋影片標題..." oninput="filterVideos()" style="padding: 6px 12px; border-radius: 6px; border: 1px solid #333846; background-color: #12141c; color: white; font-size: 13px; width: 160px;">
+                    <select id="categoryFilter" onchange="filterVideos()" style="padding: 6px 10px; border-radius: 6px; border: 1px solid #333846; background-color: #12141c; color: white; font-size: 13px;">
+                        <option value="all">全部分類</option>
+                        <option value="free">免費</option>
+                        <option value="normal">普通會員</option>
+                        <option value="vip">VIP 獨家</option>
+                        <option value="student">學生教育</option>
+                    </select>
+                </div>
+
                 <div class="user-status">
                     <span id="roleBadge" class="badge"></span>
                     <button class="btn" id="uploadNavBtn" style="display:none;" onclick="openUploadModal()">＋ 上傳新專案影片</button>
@@ -370,7 +382,6 @@
             } else if (email.endsWith('@lmil.com')) {
                 return { role: 'normal', email, name: '普通會員' };
             } else {
-                // 若沒有對應網域但有完整格式，預設當作普通會員
                 return { role: 'normal', email, name: '普通會員' };
             }
         }
@@ -419,7 +430,6 @@
             else if (currentUser.role === 'student') badge.className = "badge badge-student";
             else if (currentUser.role === 'admin') badge.className = "badge badge-admin";
 
-            // 只有工人管理者才顯示上傳按鈕
             document.getElementById('uploadNavBtn').style.display = currentUser.role === 'admin' ? 'block' : 'none';
 
             renderVideos();
@@ -433,7 +443,7 @@
 
         // 權限檢查邏輯
         function checkCanWatch(level) {
-            if (currentUser.role === 'admin') return true; // 工人全開
+            if (currentUser.role === 'admin') return true; 
             if (level === 'free') return true;
             if (level === 'normal' && (currentUser.role === 'normal' || currentUser.role === 'vip' || currentUser.role === 'student')) return true;
             if (level === 'vip' && currentUser.role === 'vip') return true;
@@ -441,11 +451,20 @@
             return false;
         }
 
+        // 第 339 行：支援即時搜尋與分類篩選的 render 函式
         function renderVideos() {
             const grid = document.getElementById('videoGrid');
             grid.innerHTML = '';
 
+            const keyword = document.getElementById('searchInput') ? document.getElementById('searchInput').value.toLowerCase() : '';
+            const selectedCategory = document.getElementById('categoryFilter') ? document.getElementById('categoryFilter').value : 'all';
+
             videos.forEach((video, index) => {
+                const matchesKeyword = video.title.toLowerCase().includes(keyword);
+                const matchesCategory = (selectedCategory === 'all' || video.level === selectedCategory);
+
+                if (!matchesKeyword || !matchesCategory) return;
+
                 const card = document.createElement('div');
                 card.className = 'video-card';
                 const canWatch = checkCanWatch(video.level);
@@ -453,11 +472,13 @@
                 let tagHtml = '';
                 if (video.level === 'vip') tagHtml = '<div class="tag tag-vip">VIP 獨家</div>';
                 else if (video.level === 'student') tagHtml = '<div class="tag tag-student">學生教育</div>';
+                else if (video.level === 'normal') tagHtml = '<div class="tag" style="background:#2196f3; color:white;">普通</div>';
+                else if (video.level === 'free') tagHtml = '<div class="tag" style="background:#555; color:white;">免費</div>';
 
                 card.innerHTML = `
                     <div class="thumbnail" style="background-image: url('${video.thumb}')" onclick="playVideo(${index})"></div>
                     ${tagHtml}
-                    ${!canWatch ? `<div class="lock-overlay" onclick="alert('您的身分【${currentUser.name}】無法觀看此專案！請切換對應信箱解鎖。')">🔒 權限不足 (需${video.level.toUpperCase()})</div>` : ''}
+                    ${!canWatch ? `<div class="lock-overlay" onclick="alert('您的身分【${currentUser.name}】無法觀看此專案！')">🔒 權限不足</div>` : ''}
                     <div class="video-info">
                         <div class="video-title-text" onclick="playVideo(${index})">${video.title}</div>
                         ${currentUser.role === 'admin' ? `<button class="setting-btn" onclick="openSettings(${index})">⚙️設定</button>` : ''}
@@ -465,6 +486,11 @@
                 `;
                 grid.appendChild(card);
             });
+        }
+
+        // 觸發即時篩選
+        function filterVideos() {
+            renderVideos();
         }
 
         function playVideo(index) {
