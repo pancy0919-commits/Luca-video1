@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Luca's Stream - 智慧網域串流平台</title>
+    <!-- 🌟 自訂分頁小圖示 (Favicon) 擺脫 GitHub 預設地球 -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>▶️</text></svg>">
     <style>
         :root {
             --bg-color: #0f1014;
@@ -70,7 +72,7 @@
         }
 
         .btn-guest { background-color: #333846; color: white; }
-        .btn-vip { background: linear-gradient(45deg, #ff9800, #ffc107); color: #000; }
+        .btn-upgrade { background: linear-gradient(45deg, #2196f3, #4caf50); color: white; }
         .btn-auth { background-color: var(--accent-color); color: white; }
         .role-btn:hover { opacity: 0.9; transform: scale(1.01); }
 
@@ -194,8 +196,10 @@
                 <button class="role-btn btn-auth" id="submitAuthBtn" onclick="handleAuth()">驗證身分並登入</button>
             </div>
 
-            <div style="margin: 12px 0; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px;">
+            <div style="margin: 12px 0; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
                 <button class="role-btn btn-guest" onclick="loginDirect('guest')">👤 訪客快速瀏覽</button>
+                <!-- 🚀 階梯式升級按鈕：點一下升普通，再點一下升VIP -->
+                <button class="role-btn btn-upgrade" id="upgradeBtn" onclick="stepUpMembership()">⭐ 升級會員身分 (目前: 訪客 ➔ 升級普通)</button>
             </div>
 
             <div class="switch-mode" id="switchModeText" onclick="toggleMode()">
@@ -322,9 +326,10 @@
         let currentUser = { role: 'guest', email: 'guest' };
         let isRegisterMode = false;
         let animationInterval = null;
+        let upgradeStep = 0; // 0: 準備升普通, 1: 準備升VIP, 2: 已達頂峰
 
-        // 預設專案清單（包含教育影片、VIP影片與普通影片）
-        let videos = JSON.parse(localStorage.getItem('myVideos_v7')) || [
+        // 預設專案清單
+        let videos = JSON.parse(localStorage.getItem('myVideos_v8')) || [
             {
                 title: "量子糾纏與時空奇異點：黑洞內部奧祕",
                 thumb: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=600&q=80",
@@ -344,6 +349,15 @@
                 level: "free"
             }
         ];
+
+        // 頁面載入時檢查是否有儲存的登入狀態
+        window.onload = function() {
+            const savedUser = localStorage.getItem('currentUser_v8');
+            if (savedUser) {
+                currentUser = JSON.parse(savedUser);
+                initAppView();
+            }
+        };
 
         function toggleMode() {
             isRegisterMode = !isRegisterMode;
@@ -365,7 +379,24 @@
             }
         }
 
-        // 核心：依據信箱網域自動判定身分
+        // 階梯式升級按鈕邏輯
+        function stepUpMembership() {
+            const upgradeBtn = document.getElementById('upgradeBtn');
+            if (upgradeStep === 0) {
+                currentUser = { role: 'normal', email: 'user@lmil.com', name: '普通會員' };
+                upgradeStep = 1;
+                upgradeBtn.innerText = "👑 點擊再次升級 (目前: 普通 ➔ 升級VIP)";
+                alert('🎉 恭喜升級為【普通會員】！');
+            } else if (upgradeStep === 1) {
+                currentUser = { role: 'vip', email: 'vip@lmil.vip.com', name: 'VIP 尊榮會員' };
+                upgradeStep = 2;
+                upgradeBtn.innerText = "✨ 已達最高 VIP 尊榮身分！";
+                alert('👑 恭喜解鎖最高【VIP 尊榮會員】！');
+            }
+            localStorage.setItem('currentUser_v8', JSON.stringify(currentUser));
+            initAppView();
+        }
+
         function parseRoleFromEmail(email, password) {
             email = email.trim().toLowerCase();
             
@@ -391,28 +422,30 @@
             const password = document.getElementById('inputPassword').value.trim();
             if (!email || !password) return alert('請完整填寫電子郵件與密碼！');
 
-            let users = JSON.parse(localStorage.getItem('myUsers_v7')) || {};
+            let users = JSON.parse(localStorage.getItem('myUsers_v8')) || {};
 
             if (isRegisterMode) {
                 if (users[email]) return alert('此信箱已被註冊過！');
                 users[email] = password;
-                localStorage.setItem('myUsers_v7', JSON.stringify(users));
+                localStorage.setItem('myUsers_v8', JSON.stringify(users));
                 alert('註冊成功！');
             } else {
                 if (!users[email] && email.endsWith('@looca.tn.emil.com')) {
-                    // 允許工人直接用正確密碼登入
+                    // 允許工人登入
                 } else if (users[email] && users[email] !== password) {
                     return alert('密碼錯誤！');
                 }
             }
 
             currentUser = parseRoleFromEmail(email, password);
+            localStorage.setItem('currentUser_v8', JSON.stringify(currentUser));
             initAppView();
         }
 
         function loginDirect(role) {
             if (role === 'guest') {
                 currentUser = { role: 'guest', email: 'guest@visitor.com', name: '訪客' };
+                localStorage.setItem('currentUser_v8', JSON.stringify(currentUser));
                 initAppView();
             }
         }
@@ -436,12 +469,14 @@
         }
 
         function logout() {
+            localStorage.removeItem('currentUser_v8');
             currentUser = { role: 'guest', email: 'guest' };
+            upgradeStep = 0;
+            document.getElementById('upgradeBtn').innerText = "⭐ 升級會員身分 (目前: 訪客 ➔ 升級普通)";
             document.getElementById('loginView').style.display = 'flex';
             document.getElementById('appView').style.display = 'none';
         }
 
-        // 權限檢查邏輯
         function checkCanWatch(level) {
             if (currentUser.role === 'admin') return true; 
             if (level === 'free') return true;
@@ -451,7 +486,6 @@
             return false;
         }
 
-        // 第 339 行：支援即時搜尋與分類篩選的 render 函式
         function renderVideos() {
             const grid = document.getElementById('videoGrid');
             grid.innerHTML = '';
@@ -488,7 +522,6 @@
             });
         }
 
-        // 觸發即時篩選
         function filterVideos() {
             renderVideos();
         }
@@ -507,7 +540,6 @@
             }
         }
 
-        // 程式生成黑洞教育動畫
         function openCustomPlayer(title) {
             document.getElementById('playerTitle').innerText = title;
             document.getElementById('playerModal').style.display = 'flex';
@@ -581,7 +613,6 @@
             document.getElementById('playerModal').style.display = 'none';
         }
 
-        // 工人上傳與設定功能
         function openUploadModal() { document.getElementById('uploadModal').style.display = 'flex'; }
         function closeUploadModal() { document.getElementById('uploadModal').style.display = 'none'; }
 
@@ -594,7 +625,7 @@
             if (!title) return alert('請填寫標題！');
 
             videos.push({ title, thumb, url, level });
-            localStorage.setItem('myVideos_v7', JSON.stringify(videos));
+            localStorage.setItem('myVideos_v8', JSON.stringify(videos));
             closeUploadModal();
             renderVideos();
             alert('新專案影片上傳成功！');
@@ -619,7 +650,7 @@
             videos[index].url = document.getElementById('editUrl').value;
             videos[index].level = document.getElementById('editLevel').value;
 
-            localStorage.setItem('myVideos_v7', JSON.stringify(videos));
+            localStorage.setItem('myVideos_v8', JSON.stringify(videos));
             closeSettingsModal();
             renderVideos();
             alert('影片設定已更新！');
@@ -629,7 +660,7 @@
             if (confirm('確定要刪除這支影片專案嗎？')) {
                 const index = document.getElementById('editIndex').value;
                 videos.splice(index, 1);
-                localStorage.setItem('myVideos_v7', JSON.stringify(videos));
+                localStorage.setItem('myVideos_v8', JSON.stringify(videos));
                 closeSettingsModal();
                 renderVideos();
                 alert('影片已刪除！');
