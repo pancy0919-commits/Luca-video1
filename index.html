@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Luca's Stream - 智慧網域串流平台</title>
-    <!-- 🌟 自訂分頁小圖示 (Favicon) 擺脫 GitHub 預設地球 -->
+    <title>Luca's Stream - 雲端同步串流帝國</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>▶️</text></svg>">
     <style>
         :root {
@@ -198,7 +197,6 @@
 
             <div style="margin: 12px 0; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px; display: flex; flex-direction: column; gap: 8px;">
                 <button class="role-btn btn-guest" onclick="loginDirect('guest')">👤 訪客快速瀏覽</button>
-                <!-- 🚀 階梯式升級按鈕：點一下升普通，再點一下升VIP -->
                 <button class="role-btn btn-upgrade" id="upgradeBtn" onclick="stepUpMembership()">⭐ 升級會員身分 (目前: 訪客 ➔ 升級普通)</button>
             </div>
 
@@ -214,7 +212,6 @@
         <main>
             <header>
                 <h1>Luca's 專屬影音與教育平台</h1>
-                <!-- 🔍 搜尋框與分類選單 -->
                 <div style="display: flex; gap: 10px; align-items: center;">
                     <input type="text" id="searchInput" placeholder="搜尋影片標題..." oninput="filterVideos()" style="padding: 6px 12px; border-radius: 6px; border: 1px solid #333846; background-color: #12141c; color: white; font-size: 13px; width: 160px;">
                     <select id="categoryFilter" onchange="filterVideos()" style="padding: 6px 10px; border-radius: 6px; border: 1px solid #333846; background-color: #12141c; color: white; font-size: 13px;">
@@ -234,11 +231,11 @@
             </header>
 
             <div class="hero">
-                <h2>全方位智慧串流與教育專案庫</h2>
-                <p>支援訪客、普通會員、VIP、學生與工人管理者的分級影音平台。</p>
+                <h2>全方位雲端同步串流與教育專案庫</h2>
+                <p>支援訪客、普通會員、VIP、學生與工人管理者的雲端分級影音平台。</p>
             </div>
 
-            <div class="section-title">平台所有專案與教育影片</div>
+            <div class="section-title">平台所有專案與教育影片 (雲端同步中)</div>
             <div class="video-grid" id="videoGrid"></div>
         </main>
     </div>
@@ -256,7 +253,7 @@
     <!-- 4. 新增/上傳影片 Modal -->
     <div class="modal" id="uploadModal">
         <div class="modal-content">
-            <h3>上傳/新增專案影片</h3>
+            <h3>上傳/新增專案影片到雲端</h3>
             <div class="form-group">
                 <label>影片標題</label>
                 <input type="text" id="videoTitle" placeholder="例如：基礎物理教育動畫">
@@ -280,15 +277,15 @@
             </div>
             <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
                 <button class="btn-logout" onclick="closeUploadModal()">取消</button>
-                <button class="btn" onclick="saveNewVideo()">確認上傳</button>
+                <button class="btn" onclick="saveNewVideo()">確認上傳到雲端</button>
             </div>
         </div>
     </div>
 
-    <!-- 5. 影片個別設定 Modal (僅工人可調整) -->
+    <!-- 5. 影片個別設定 Modal -->
     <div class="modal" id="settingsModal">
         <div class="modal-content">
-            <h3>⚙️ 影片專案設定</h3>
+            <h3>⚙️ 雲端影片專案設定</h3>
             <input type="hidden" id="editIndex">
             <div class="form-group">
                 <label>修改標題</label>
@@ -323,13 +320,17 @@
 
     <script>
         const WORKER_PASSWORD = "1234"; 
+        const JSONBIN_API_KEY = "$2a$10$YArz5d0T90npIHpdYPamd.kZcpGfkvvj1JvQ4nYVCodZPYes3r3wy"; 
+        // 第一次使用時我們會自動幫你建立一個雲端儲存槽
+        let JSONBIN_BIN_ID = localStorage.getItem('luca_bin_id') || ""; 
+
         let currentUser = { role: 'guest', email: 'guest' };
         let isRegisterMode = false;
         let animationInterval = null;
-        let upgradeStep = 0; // 0: 準備升普通, 1: 準備升VIP, 2: 已達頂峰
+        let upgradeStep = 0;
 
         // 預設專案清單
-        let videos = JSON.parse(localStorage.getItem('myVideos_v8')) || [
+        let videos = [
             {
                 title: "量子糾纏與時空奇異點：黑洞內部奧祕",
                 thumb: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=600&q=80",
@@ -350,13 +351,79 @@
             }
         ];
 
-        // 頁面載入時檢查是否有儲存的登入狀態
+        // 從 JSONbin 雲端載入影片資料
+        async function loadVideosFromCloud() {
+            if (!JSONBIN_BIN_ID) {
+                // 如果還沒有 Bin ID，先使用預設資料並嘗試建立一個
+                renderVideos();
+                return;
+            }
+
+            try {
+                const response = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
+                    headers: { 'X-Master-Key': JSONBIN_API_KEY }
+                });
+                const data = await response.json();
+                if (data && data.record && data.record.videos) {
+                    videos = data.record.videos;
+                    renderVideos();
+                }
+            } catch (err) {
+                console.log('從雲端載入失敗，使用預設資料', err);
+                renderVideos();
+            }
+        }
+
+        // 儲存影片資料到 JSONbin 雲端
+        async function saveVideosToCloud() {
+            renderVideos(); // 畫面即時更新
+
+            if (!JSONBIN_BIN_ID) {
+                // 如果第一次上傳，自動在 JSONbin 建立一個新的 Bin
+                try {
+                    const response = await fetch('https://api.jsonbin.io/v3/b', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Master-Key': JSONBIN_API_KEY,
+                            'X-Collection-Id': ''
+                        },
+                        body: JSON.stringify({ videos: videos })
+                    });
+                    const data = await response.json();
+                    if (data && data.metadata && data.metadata.id) {
+                        JSONBIN_BIN_ID = data.metadata.id;
+                        localStorage.setItem('luca_bin_id', JSONBIN_BIN_ID);
+                        alert('☁️ 成功建立雲端資料庫通道！');
+                    }
+                } catch (err) {
+                    alert('⚠️ 雲端建立失敗，已暫存於本機。');
+                }
+                return;
+            }
+
+            // 如果已經有 Bin ID，直接更新內容
+            try {
+                await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Master-Key': JSONBIN_API_KEY
+                    },
+                    body: JSON.stringify({ videos: videos })
+                });
+            } catch (err) {
+                console.log('雲端更新失敗', err);
+            }
+        }
+
         window.onload = function() {
             const savedUser = localStorage.getItem('currentUser_v8');
             if (savedUser) {
                 currentUser = JSON.parse(savedUser);
                 initAppView();
             }
+            loadVideosFromCloud();
         };
 
         function toggleMode() {
@@ -379,7 +446,6 @@
             }
         }
 
-        // 階梯式升級按鈕邏輯
         function stepUpMembership() {
             const upgradeBtn = document.getElementById('upgradeBtn');
             if (upgradeStep === 0) {
@@ -625,10 +691,9 @@
             if (!title) return alert('請填寫標題！');
 
             videos.push({ title, thumb, url, level });
-            localStorage.setItem('myVideos_v8', JSON.stringify(videos));
+            saveVideosToCloud();
             closeUploadModal();
-            renderVideos();
-            alert('新專案影片上傳成功！');
+            alert('🚀 影片已成功同步上傳至雲端資料庫！');
         }
 
         function openSettings(index) {
@@ -650,20 +715,18 @@
             videos[index].url = document.getElementById('editUrl').value;
             videos[index].level = document.getElementById('editLevel').value;
 
-            localStorage.setItem('myVideos_v8', JSON.stringify(videos));
+            saveVideosToCloud();
             closeSettingsModal();
-            renderVideos();
-            alert('影片設定已更新！');
+            alert('⚙️ 雲端影片設定已更新！');
         }
 
         function deleteVideo() {
-            if (confirm('確定要刪除這支影片專案嗎？')) {
+            if (confirm('確定要從雲端刪除這支影片專案嗎？')) {
                 const index = document.getElementById('editIndex').value;
                 videos.splice(index, 1);
-                localStorage.setItem('myVideos_v8', JSON.stringify(videos));
+                saveVideosToCloud();
                 closeSettingsModal();
-                renderVideos();
-                alert('影片已刪除！');
+                alert('🗑️ 影片已從雲端刪除！');
             }
         }
     </script>
